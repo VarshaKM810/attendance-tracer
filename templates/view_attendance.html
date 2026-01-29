@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Attendance - Attendance Tracer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        
+        input[type="text"], input[type="date"] {
+            padding: 0.8rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+        
+        button {
+            padding: 0.8rem 1.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.3s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 2rem;
+        }
+        
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        th {
+            background: #667eea;
+            color: white;
+            font-weight: bold;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .status {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: bold;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+        
+        .status.present {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.absent {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.late {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status.leave {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #999;
+        }
+        
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        
+        .back-link {
+            display: inline-block;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            margin-top: 1rem;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Attendance Records</h1>
+        
+        <div class="stats" id="stats"></div>
+        
+        <div class="controls">
+            <input type="text" id="searchName" placeholder="Search by name...">
+            <input type="date" id="filterDate">
+            <button onclick="filterRecords()">Filter</button>
+            <button onclick="resetFilter()" style="background: #999;">Reset</button>
+        </div>
+        
+        <div class="table-wrapper">
+            <table id="attendanceTable">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Roll Number</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+        
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <div class="empty-state-icon">📭</div>
+            <p>No attendance records found.</p>
+        </div>
+        
+        <a href="/attendance" class="back-link">← Mark Attendance</a>
+        <a href="/" class="back-link">← Back to Home</a>
+    </div>
+    
+    <script>
+        let allRecords = [];
+        
+        function loadRecords() {
+            fetch('/api/attendance-records')
+                .then(response => response.json())
+                .then(data => {
+                    allRecords = data;
+                    displayRecords(allRecords);
+                    updateStats(allRecords);
+                })
+                .catch(error => console.error('Error loading records:', error));
+        }
+        
+        function displayRecords(records) {
+            const tableBody = document.getElementById('tableBody');
+            const emptyState = document.getElementById('emptyState');
+            
+            tableBody.innerHTML = '';
+            
+            if (records.length === 0) {
+                emptyState.style.display = 'block';
+                document.getElementById('attendanceTable').style.display = 'none';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            document.getElementById('attendanceTable').style.display = 'table';
+            
+            records.forEach(record => {
+                const row = document.createElement('tr');
+                const statusLower = record.Status ? record.Status.toLowerCase() : 'present';
+                row.innerHTML = `
+                    <td>${record.Name}</td>
+                    <td>${record['Roll Number']}</td>
+                    <td>${record.Date}</td>
+                    <td>${record.Time}</td>
+                    <td><span class="status ${statusLower}">${record.Status}</span></td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+        
+        function updateStats(records) {
+            const stats = {
+                total: records.length,
+                present: records.filter(r => r.Status === 'Present').length,
+                absent: records.filter(r => r.Status === 'Absent').length,
+                late: records.filter(r => r.Status === 'Late').length,
+            };
+            
+            const statsDiv = document.getElementById('stats');
+            statsDiv.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-number">${stats.total}</div>
+                    <div class="stat-label">Total Records</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.present}</div>
+                    <div class="stat-label">Present</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.absent}</div>
+                    <div class="stat-label">Absent</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.late}</div>
+                    <div class="stat-label">Late</div>
+                </div>
+            `;
+        }
+        
+        function filterRecords() {
+            const searchName = document.getElementById('searchName').value.toLowerCase();
+            const filterDate = document.getElementById('filterDate').value;
+            
+            const filtered = allRecords.filter(record => {
+                const nameMatch = record.Name.toLowerCase().includes(searchName);
+                const dateMatch = !filterDate || record.Date === filterDate;
+                return nameMatch && dateMatch;
+            });
+            
+            displayRecords(filtered);
+        }
+        
+        function resetFilter() {
+            document.getElementById('searchName').value = '';
+            document.getElementById('filterDate').value = '';
+            displayRecords(allRecords);
+        }
+        
+        // Load records on page load
+        loadRecords();
+    </script>
+</body>
+</html>
